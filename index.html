@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notes App</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet"/>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <i class="ri-sticky-note-2-fill"></i>
+        <span>Noted</span>
+      </div>
+    </div>
+    <div class="search-wrap">
+      <i class="ri-search-line"></i>
+      <input type="text" id="search" placeholder="Search notes..." />
+    </div>
+    <div class="notes-list" id="notes-list"></div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <span id="note-count">0 notes</span>
+      <button id="new-btn"><i class="ri-add-line"></i> New Note</button>
+    </div>
+
+    <div class="editor-area" id="editor-area">
+      <div class="welcome">
+        <i class="ri-quill-pen-line"></i>
+        <p>Select a note or create a new one</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete confirm modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-icon"><i class="ri-delete-bin-6-line"></i></div>
+      <h3>Delete Note?</h3>
+      <p>This action cannot be undone.</p>
+      <div class="modal-actions">
+        <button id="cancel-btn">Cancel</button>
+        <button id="confirm-delete-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
