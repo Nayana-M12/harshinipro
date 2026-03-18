@@ -1,4 +1,6 @@
-let notes = JSON.parse(localStorage.getItem('notes')) || [];
+const API = 'http://localhost:3000';
+
+let notes = [];
 let activeId = null;
 let deleteTargetId = null;
 let saveTimer = null;
@@ -12,8 +14,10 @@ const modalOverlay = document.getElementById('modal-overlay');
 const cancelBtn = document.getElementById('cancel-btn');
 const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
 
-function save() {
-  localStorage.setItem('notes', JSON.stringify(notes));
+async function fetchNotes() {
+  const res = await fetch(`${API}/notes`);
+  notes = await res.json();
+  renderList(searchInput.value);
 }
 
 function formatDate(ts) {
@@ -21,14 +25,14 @@ function formatDate(ts) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function escHtml(s) {
+function escHtml(s = '') {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function renderList(filter = '') {
   const q = filter.toLowerCase();
   const filtered = notes.filter(n =>
-    n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q)
+    (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q)
   );
 
   noteCount.textContent = `${notes.length} note${notes.length !== 1 ? 's' : ''}`;
@@ -45,8 +49,8 @@ function renderList(filter = '') {
     item.dataset.id = note.id;
     item.innerHTML = `
       <div class="note-item-title">${escHtml(note.title) || 'Untitled'}</div>
-      <div class="note-item-preview">${escHtml(note.body) || 'No content'}</div>
-      <div class="note-item-date">${formatDate(note.updatedAt)}</div>
+      <div class="note-item-preview">${escHtml(note.content) || 'No content'}</div>
+      <div class="note-item-date">${formatDate(note.updated_at)}</div>
     `;
     item.addEventListener('click', () => openNote(note.id));
     notesList.appendChild(item);
@@ -61,7 +65,7 @@ function openNote(id) {
   editorArea.innerHTML = `
     <div class="editor">
       <div class="editor-toprow">
-        <span class="editor-meta">Last edited ${formatDate(note.updatedAt)}</span>
+        <span class="editor-meta">Last edited ${formatDate(note.updated_at)}</span>
         <div class="editor-actions">
           <button class="save-note-btn" id="save-btn">
             <i class="ri-save-3-line"></i> Save
@@ -72,7 +76,7 @@ function openNote(id) {
         </div>
       </div>
       <input type="text" id="editor-title" placeholder="Note title..." value="${escHtml(note.title)}" />
-      <textarea id="editor-body" placeholder="Start writing...">${escHtml(note.body)}</textarea>
+      <textarea id="editor-body" placeholder="Start writing...">${escHtml(note.content)}</textarea>
       <div class="save-indicator" id="save-indicator"></div>
     </div>
   `;
@@ -89,29 +93,44 @@ function openNote(id) {
 }
 
 function onEdit() {
-  const note = notes.find(n => n.id === activeId);
-  if (!note) return;
-  note.title = document.getElementById('editor-title').value;
-  note.body = document.getElementById('editor-body').value;
-  note.updatedAt = Date.now();
-
   const indicator = document.getElementById('save-indicator');
   indicator.textContent = 'Unsaved changes...';
   indicator.className = 'save-indicator unsaved';
-
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => manualSave(), 2000);
 }
 
-function manualSave() {
-  const note = notes.find(n => n.id === activeId);
-  if (!note) return;
+async function manualSave() {
   const titleEl = document.getElementById('editor-title');
   const bodyEl = document.getElementById('editor-body');
-  if (titleEl) note.title = titleEl.value;
-  if (bodyEl) note.body = bodyEl.value;
-  note.updatedAt = Date.now();
-  save();
+  if (!titleEl || !bodyEl) return;
+
+  const title = titleEl.value;
+  const content = bodyEl.value;
+
+  if (activeId === 'new') {
+    // create
+    const res = await fetch(`${API}/notes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, content: content || ' ' })
+    });
+    const created = await res.json();
+    activeId = created.id;
+    await fetchNotes();
+    openNote(activeId);
+    return;
+  }
+
+  await fetch(`${API}/notes/${activeId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, content })
+  });
+
+  // update local cache
+  const note = notes.find(n => n.id === activeId);
+  if (note) { note.title = title; note.content = content; note.updated_at = new Date().toISOString(); }
 
   const indicator = document.getElementById('save-indicator');
   if (indicator) {
@@ -132,16 +151,15 @@ function manualSave() {
   renderList(searchInput.value);
 }
 
-newBtn.addEventListener('click', () => {
-  const note = {
-    id: Date.now(),
-    title: '',
-    body: '',
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  };
+newBtn.addEventListener('click', async () => {
+  // create a blank note immediately
+  const res = await fetch(`${API}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title: '', content: ' ' })
+  });
+  const note = await res.json();
   notes.unshift(note);
-  save();
   renderList(searchInput.value);
   openNote(note.id);
   setTimeout(() => document.getElementById('editor-title')?.focus(), 50);
@@ -154,9 +172,9 @@ modalOverlay.addEventListener('click', e => {
   if (e.target === modalOverlay) modalOverlay.classList.remove('active');
 });
 
-confirmDeleteBtn.addEventListener('click', () => {
+confirmDeleteBtn.addEventListener('click', async () => {
+  await fetch(`${API}/notes/${deleteTargetId}`, { method: 'DELETE' });
   notes = notes.filter(n => n.id !== deleteTargetId);
-  save();
   if (activeId === deleteTargetId) {
     activeId = null;
     editorArea.innerHTML = `
@@ -169,7 +187,6 @@ confirmDeleteBtn.addEventListener('click', () => {
   renderList(searchInput.value);
 });
 
-// Ctrl+S to save
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
@@ -178,4 +195,4 @@ document.addEventListener('keydown', e => {
 });
 
 // Init
-renderList();
+fetchNotes();
